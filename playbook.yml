@@ -1,0 +1,12 @@
+---
+- hosts: all
+  become: yes
+
+  vars:
+    k8s_version: "1.23.5"
+
+  roles:
+  - update_centos
+  - remove_kubernetes
+  - install_kubernetes
+

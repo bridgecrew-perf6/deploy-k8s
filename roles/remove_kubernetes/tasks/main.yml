@@ -1,0 +1,29 @@
+---
+- name: Reset Kubernetes cluster (kubeadm reset)
+  become: yes
+  command: "{{ item }}"
+  with_items:
+    - kubeadm reset -f
+  ignore_errors: yes
+
+- name: Remove kubeconfig
+  become: yes
+  ansible.builtin.file: 
+    path: /root/.kube/config
+    state: absent
+
+- name: Remove kubernetes packages (yum)
+  become: yes
+  yum:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    update_cache: yes
+    state: removed
+
+- name: Make sure exclude is removed from Kubernetes repo
+  ansible.builtin.lineinfile:
+    path: /etc/yum.repos.d/kubernetes.repo
+    state: absent
+    regexp: '^exclude'

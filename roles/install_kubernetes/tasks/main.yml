@@ -1,0 +1,79 @@
+---
+- name: Set the docker cgroup to systemd
+  become: yes
+  copy:
+    src: files/daemon.json
+    dest: /etc/docker/daemon.json
+
+- name: restart docker service, also issue daemon-reload to pick up config changes
+  systemd:
+    state: restarted
+    daemon_reload: yes
+    name: docker.service
+
+- name: Add Kubernetes yum repository
+  become: yes
+  yum_repository:
+    name: kubernetes
+    description: Kubernetes Repository
+    file: kubernetes
+    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+    enabled: yes
+    gpgcheck: yes
+    repo_gpgcheck: yes
+    gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+    exclude: kube*
+
+- name: Install kubernetes packages (RHEL/CentOS)
+  become: yes
+  yum:
+    name:
+      - kubelet-{{ k8s_version }}-0
+      - kubeadm-{{ k8s_version }}-0
+      - kubectl-{{ k8s_version }}-0
+    update_cache: yes
+    disable_excludes: kubernetes
+    state: present
+
+- name: Enable and check kubelet service
+  become: yes
+  systemd:
+    name: kubelet
+    daemon_reload: yes
+    state: started
+    enabled: yes
+
+- name: Restart kubelet
+  become: yes
+  service:
+    name: kubelet
+    daemon_reload: yes
+    state: restarted
+
+- name: Initialize the Kubernetes cluster using kubeadm
+  become: yes
+  command: kubeadm init --kubernetes-version={{ k8s_version }} --pod-network-cidr=192.168.0.0/16
+
+- name: Create $HOME/.kube directory
+  become: yes
+  file: 
+    path: $HOME/.kube
+    state: directory
+
+- name: Copy kubeconfig to $HOME/.kube directoy
+  become: yes
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: $HOME/.kube/config
+    remote_src: yes
+    mode: '0600'
+
+- name: Taint master node
+  become: yes
+  command: kubectl taint nodes --all node-role.kubernetes.io/master-
+
+
+- name: Install calico pod network
+  become: yes
+  command: kubectl apply -f https://docs.projectcalico.org/v3.17/manifests/calico.yaml
+
